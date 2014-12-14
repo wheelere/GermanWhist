@@ -9,13 +9,17 @@
 import Foundation
 import SpriteKit
 
+
+private let deckLocation = CGPoint(x: 490, y: 155)
+private let cardSize = CGRect(x: deckLocation.x, y: deckLocation.y, width: 50, height: 75)
+
 class Card: UIImageView {
-    var suit: Character
-    var value: Int
+    var suit: Character?
+    var value: Int?
     var faceUp: Bool = false
     
     required init(coder aDecoder: NSCoder!) {
-        fatalError("NSCoding not supported")
+        super.init(coder: aDecoder)
     }
     
     init(suit: Character, value: Int) {
@@ -23,6 +27,7 @@ class Card: UIImageView {
         self.value = value
         let cardFace = UIImage(named: "redback")
         super.init(image: cardFace)
+        self.frame = cardSize
     }
     
     func flip() {
@@ -32,11 +37,11 @@ class Card: UIImageView {
             self.image = cardFace
         } else {
             faceUp = true
-            let cardFace = UIImage(named: "\(value)\(suit)")
+            let cardFace = UIImage(named: "\(value!)\(suit!)")
             self.image = cardFace
         }
     }
-    
+
     class func sortHand(cards: [Card]) -> [Card] {
         let ordered = sorted(cards, { (c1: Card, c2: Card) -> Bool in
             if (c1.suit == c2.suit) {
@@ -64,28 +69,4 @@ class Card: UIImageView {
         }
     }
     
-    class func bestPlay(cards: [Card], _ lead: Character?, _ trump: Character) -> Card {
-        var ranked = sorted(cards, { (c1: Card, c2: Card) -> Bool in
-            if (c1.suit == c2.suit) {
-                return c1.value > c2.value
-            } // if the cards are the same suit
-            else {
-                if lead != nil {
-                    if c1.suit == lead {
-                        return true
-                    } else if c2.suit == lead {
-                        return false
-                    } // if c1 is leading suit else if c2 is leading suit
-                }
-                if c1.suit == trump {
-                    return true
-                } else if c2.suit == trump {
-                    return false
-                } else {
-                    return c1.value > c2.value
-                } // if c1 is trump/else if c2 is trump/else highest value
-            } // else the cards are different suits
-        })
-        return ranked[0]
-    }
 }

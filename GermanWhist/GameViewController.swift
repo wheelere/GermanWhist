@@ -9,47 +9,24 @@
 import UIKit
 import Foundation
 
+var opponent: Opponent = Opponent.sharedOpponent
+
 class GameViewController: UIViewController {
-    @IBOutlet weak var playerCard1Image: UIImageView! // tag = 0
-    @IBOutlet weak var playerCard2Image: UIImageView! // tag = 1
-    @IBOutlet weak var playerCard3Image: UIImageView! // tag = 2
-    @IBOutlet weak var playerCard4Image: UIImageView! // tag = 3
-    @IBOutlet weak var playerCard5Image: UIImageView! // tag = 4
-    @IBOutlet weak var playerCard6Image: UIImageView! // tag = 5
-    @IBOutlet weak var playerCard7Image: UIImageView! // tag = 6
-    @IBOutlet weak var playerCard8Image: UIImageView! // tag = 7
-    @IBOutlet weak var playerCard9Image: UIImageView! // tag = 8
-    @IBOutlet weak var playerCard10Image: UIImageView! // tag = 9
-    @IBOutlet weak var playerCard11Image: UIImageView! // tag = 10
-    @IBOutlet weak var playerCard12Image: UIImageView! // tag = 11
-    @IBOutlet weak var playerCard13Image: UIImageView! // tag = 12
     
-    @IBOutlet weak var opponentCard1Image: UIImageView! // tag = 13
-    @IBOutlet weak var opponentCard2Image: UIImageView! // tag = 14
-    @IBOutlet weak var opponentCard3Image: UIImageView! // tag = 15
-    @IBOutlet weak var opponentCard4Image: UIImageView! // tag = 16
-    @IBOutlet weak var opponentCard5Image: UIImageView! // tag = 17
-    @IBOutlet weak var opponentCard6Image: UIImageView! // tag = 18
-    @IBOutlet weak var opponentCard7Image: UIImageView! // tag = 19
-    @IBOutlet weak var opponentCard8Image: UIImageView! // tag = 20
-    @IBOutlet weak var opponentCard9Image: UIImageView! // tag = 21
-    @IBOutlet weak var opponentCard10Image: UIImageView! // tag = 22
-    @IBOutlet weak var opponentCard11Image: UIImageView! // tag = 23
-    @IBOutlet weak var opponentCard12Image: UIImageView! // tag = 24
-    @IBOutlet weak var opponentCard13Image: UIImageView! // tag = 25
     
-    @IBOutlet weak var topCardOfDeck: UIImageView! // tag = 26
-    
-    @IBOutlet weak var playerPlayedCard: UIImageView! // tag = 30
-    @IBOutlet weak var opponentPlayedCard: UIImageView! // tag = 31
-    
+    @IBOutlet weak var optionsButton: UIButton!
     @IBOutlet weak var trumpLabel: UILabel!
     @IBOutlet weak var opponentPointsLabel: UILabel!
     @IBOutlet weak var playerPointsLabel: UILabel!
     
+    var playerPlayedCardLocation = CGPoint(x: 265, y: 170)
+    var opponentPlayedCardLocation = CGPoint(x: 185, y: 140)
+    var deckLocation = CGPoint(x: 490, y: 155)
+    var playerFirstCardLocation = CGPoint(x: 45, y: 270)
+    var opponentFirstCardLocation = CGPoint(x: 45, y: 57)
+    
     var deck: [Card] = []
     var playerHand: [Card] = []
-    var opponentHand: [Card] = []
     var currCard: Card?
     
     var topCard: Card?
@@ -57,221 +34,484 @@ class GameViewController: UIViewController {
     var trickTurn: Int?
     var turn = 0
     
+    var suits: [Character] = ["c", "d", "h", "s"]
     var trump: Character! = "x"
-    var dummyCard = Card(suit: "j", value: 0)
-    var playerCard: Card?
-    var opponentCard: Card?
-    var isPlayerTurn: Bool = arc4random_uniform(1) == 1;
+    var playerPlayedCard: Card?
+    var opponentPlayedCard: Card?
+    var playerEmptyIndex: Int?
+    var opponentEmptyIndex: Int?
+    
+    var isPlayerTurn: Bool = arc4random_uniform(2) == 1
     
     
     var playerPoints = 0
     var opponentPoints = 0
     
+    
     override func viewDidLoad() {
         super.viewDidLoad()
+        optionsButton.layer.cornerRadius = 10
+        trumpLabel.text = "Trump:\n?"
         // Do any additional setup after loading the view, typically from a nib.
-        var suits: [Character] = ["c", "d", "h", "s"]
+    } // viewDidLoad
+    
+    override func viewDidAppear(animated: Bool) {
+        super.viewDidAppear(animated)
+        setUpGame()
+        
+    } // viewDidAppear
+    
+    @IBAction func cardTap(sender: UITapGestureRecognizer) {
+        if sender.view is Card {
+            let cardView = sender.view as Card
+            if cardView == currCard {
+                UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                    cardView.center = self.playerPlayedCardLocation
+                    }, completion: nil)
+                cardView.userInteractionEnabled = false
+                playerPlayedCard = cardView
+                playerEmptyIndex = find(playerHand, cardView)
+                playerHand.removeAtIndex(playerEmptyIndex!)
+                currCard = nil
+                disablePlayerHand()
+                if opponentPlayedCard != nil {
+                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+                    dispatch_after(delayTime, dispatch_get_main_queue()) {
+                        self.cleanUp()
+                    }
+                } else {
+                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+                    dispatch_after(delayTime, dispatch_get_main_queue()) {
+                        self.opponentPlay()
+                    }
+                }
+            } else {
+                var haveLedSuit = false
+                if opponentPlayedCard != nil {
+                    for card in playerHand {
+                        if card.suit == opponentPlayedCard!.suit {
+                            haveLedSuit = true
+                            break
+                        }
+                    }
+                }
+                if !haveLedSuit || opponentPlayedCard!.suit == cardView.suit {
+                    if currCard != nil {
+                        UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                            self.currCard!.center.y = self.playerFirstCardLocation.y
+                            }, completion: nil)
+                    }
+                    currCard = cardView
+                    UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                        cardView.center.y = self.playerFirstCardLocation.y - 20
+                        }, completion: nil)
+                }
+                
+                if !haveLedSuit && bidTurn > 13 {
+                    switch opponentPlayedCard!.suit! {
+                    case "c":
+                        opponent.opponentVoid[0] = true
+                    case "d":
+                        opponent.opponentVoid[1] = true
+                    case "h":
+                        opponent.opponentVoid[2] = true
+                    case "s":
+                        opponent.opponentVoid[3] = true
+                    default:
+                        break
+                    }
+                }
+            }
+        }
+    }
+    
+    @IBAction func OptionsTap(sender: UIButton) {
+        
+        let alertController = UIAlertController(title: "Options", message: nil, preferredStyle: .Alert)
+        let newGameAction = UIAlertAction(title: "Restart", style: .Default, handler: { (alert: UIAlertAction!) in
+            self.setUpGame()
+        })
+        let cancelAction = UIAlertAction(title: "Cancel", style: .Cancel, handler: nil)
+        let menuAction = UIAlertAction(title: "Menu", style: .Default, handler: { (alert: UIAlertAction!) in
+            self.dismissViewControllerAnimated(true, completion: nil)
+        })
+        alertController.addAction(newGameAction)
+        alertController.addAction(menuAction)
+        alertController.addAction(cancelAction)
+        presentViewController(alertController, animated: true, completion: nil)
+    }
+    
+    @IBAction func tapBackground(sender: AnyObject) {
+        if currCard != nil {
+            UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                self.currCard!.center.y = self.playerFirstCardLocation.y
+                }, completion: nil)
+            currCard = nil
+        }
+    }
+    
+    func setUpGame() {
+        optionsButton.userInteractionEnabled = false
+        for v in view.subviews {
+            if v is Card {
+                v.removeFromSuperview()
+            }
+        }
+        deck.removeAll(keepCapacity: true)
+        playerHand.removeAll(keepCapacity: true)
+        opponent.hand.removeAll(keepCapacity: true)
+        playerPoints = 0
+        opponentPoints = 0
+        trump = "x"
+        self.trumpLabel.text = "Trump:\n?"
+        isPlayerTurn = arc4random_uniform(2) == 1
+        
         for s in 0...3 {
             for v in 2...14 {
                 let card = Card(suit: suits[s], value: v)
+                card.center = deckLocation
                 deck.append(card)
+                let recognizer = UITapGestureRecognizer(target: self, action:Selector("cardTap:"))
+                recognizer.delegate = nil
+                card.addGestureRecognizer(recognizer)
             }
         } // for loops build the complete deck
         
         
-        for i in 1...13 {
-            let index1 = Int(arc4random_uniform(51 - (i - 1) * 2))
-            let index2 = Int(arc4random_uniform(51 - (i * 2 - 1)))
+        for i in 0...12 {
+            let index1 = Int(arc4random_uniform(52 - i * 2))
+            let index2 = Int(arc4random_uniform(52 - i * 2 - 1))
             let card1 = deck[index1]
             deck.removeAtIndex(index1)
             let card2 = deck[index2]
             deck.removeAtIndex(index2)
-            let playerSpot = view.viewWithTag(i) as UIImageView
-            let opponentSpot = view.viewWithTag(i + 13) as UIImageView
+            var dealDelay = 0.2 * (2.0 * Double(i)) as NSTimeInterval
             if isPlayerTurn {
                 
-                playerHand.append(card1)
                 card1.flip()
+                
+                
+                view.insertSubview(card1, atIndex: i)
+                UIView.animateWithDuration(0.3, delay: dealDelay, options: nil, animations: {
+                    card1.center.x = self.playerFirstCardLocation.x + CGFloat(i * 30)
+                    card1.center.y = self.playerFirstCardLocation.y
+                    }, completion: nil)
                 // flip the card and animate it moving to the hand
-                playerSpot.image = card1.image
-                opponentHand.append(card2);
+                card1.layer.zPosition = CGFloat(i)
+                playerHand.append(card1)
+                
+                
                 // animate the card moving to the hand
-                opponentSpot.image = card2.image
+                view.addSubview(card2)
+                dealDelay += 0.2
+                UIView.animateWithDuration(0.3, delay: dealDelay, options: nil, animations: {
+                    card2.center.x = self.opponentFirstCardLocation.x + CGFloat(i * 30)
+                    card2.center.y = self.opponentFirstCardLocation.y
+                    }, completion: nil)
+                card2.layer.zPosition = CGFloat(i)
+                opponent.hand.append(card2)
+                opponent.cardsKnown.append(card2)
             } else {
-                opponentHand.append(card1);
-                opponentSpot.image = card1.image
-                playerHand.append(card2)
+                view.addSubview(card1)
+                
+                UIView.animateWithDuration(0.3, delay: dealDelay, options: nil, animations: {
+                    card1.center.x = self.opponentFirstCardLocation.x + CGFloat(i * 30)
+                    card1.center.y = self.opponentFirstCardLocation.y
+                    }, completion: nil)
+                // flip the card and animate it moving to the hand
+                card1.layer.zPosition = CGFloat(i)
+                
+                opponent.hand.append(card1)
+                opponent.cardsKnown.append(card1)
+                
+                dealDelay += 0.2
                 card2.flip()
-                playerSpot.image = card2.image
+                view.insertSubview(card2, atIndex: i)
+                UIView.animateWithDuration(0.3, delay: dealDelay, options: nil, animations: {
+                    card2.center.x = self.playerFirstCardLocation.x + CGFloat(i * 30)
+                    card2.center.y = self.playerFirstCardLocation.y
+                    }, completion: nil)
+                card2.layer.zPosition = CGFloat(i)
+                playerHand.append(card2)
             }
             // we need to deal the cards into the hands
         } // add cards to the players' hand
         
-        playerHand = Card.sortHand(playerHand)
-        for i in 0...12 {
-            let pCard = playerHand[i]
-            // we need to animate sorting the hand
-        } // sort the player's hand visually: clubs->diamonds->hearts->spades
         
-        
-        
-        
-        let topIndex = Int(arc4random_uniform(25))
-        topCard = deck[topIndex]
-        deck.removeAtIndex(topIndex)
-        let topCardView = view.viewWithTag(27) as UIImageView
-        topCard!.flip()
-        topCardView.image = topCard!.image
-        trump = topCard!.suit
-        bidTurn = 0
-        playTurn()
-        
-        var trumpName = ""
-        if trump == "c" {
-            trumpName = "Clubs"
-        } else if trump == "d" {
-            trumpName = "Diamonds"
-        } else if trump == "h" {
-            trumpName = "Hearts"
-        } else if trump == "s" {
-            trumpName = "Spades"
-        }
-        trumpLabel.text = "Trump:\n" + trumpName
         
         playerPointsLabel.text = "Player: \(playerPoints)"
         opponentPointsLabel.text = "Opponent: \(opponentPoints)"
-    } // viewDidLoad
-    
-    @IBAction func cardTap(sender: UITapGestureRecognizer) {
-        print(sender.view)
-    }
-    
-    
-    
-    func playTurn() {
-        if !isPlayerTurn {
-            if playerCard != nil {
-                opponentPlay(playerCard!.suit)
-            } else {
-                opponentPlay(nil)
+        let topIndex = Int(arc4random_uniform(26))
+        topCard = deck[topIndex]
+        deck.removeAtIndex(topIndex)
+        view.addSubview(topCard!)
+        trump = topCard!.suit
+        let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 6))
+        dispatch_after(delayTime, dispatch_get_main_queue()) {
+            
+            self.topCard!.flip()
+            
+            var trumpName = ""
+            if self.trump == "c" {
+                trumpName = "Clubs"
+            } else if self.trump == "d" {
+                trumpName = "Diamonds"
+            } else if self.trump == "h" {
+                trumpName = "Hearts"
+            } else if self.trump == "s" {
+                trumpName = "Spades"
             }
+            self.trumpLabel.text = "Trump:\n" + trumpName
+            self.sortPlayerHand()
+            
+            
+            opponent.trump = self.trump
+            
+            self.bidTurn = 0
+            let delayTime2 = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+            dispatch_after(delayTime2, dispatch_get_main_queue()) {
+                for i in 0...12 {
+                    self.enablePlayerHand()
+                }
+                if !self.isPlayerTurn {
+                    self.opponentPlay()
+                }
+            }
+            self.optionsButton.userInteractionEnabled = true
         }
-    } // playTurn
+
+    } // setUpGame
     
     // cleanUp ends the turn and gives out new cards if appropriate, then calls begin turn if appropriate
     func cleanUp() {
-        var winningCard = Card.winner(playerCard!, opponentCard!, trump)
+        disablePlayerHand()
+        var winningCard: Card?
+        if (isPlayerTurn) {
+            winningCard = Card.winner(playerPlayedCard!, opponentPlayedCard!, trump)
+        } else {
+            winningCard = Card.winner(opponentPlayedCard!, playerPlayedCard!, trump)
+        }
+        
         if bidTurn != nil {
-            if winningCard == playerCard {
-                playerPoints++
+            if winningCard! == playerPlayedCard {
                 
-                var emptyIndex = find(playerHand, dummyCard)
-                playerHand[emptyIndex!] = topCard!
-                let playerSpot = view.viewWithTag(emptyIndex! + 1) as UIImageView
-                // need to remove topcard from the deck
-                playerSpot.image = topCard!.image
+                topCard!.userInteractionEnabled = true
+                UIView.animateWithDuration(0.6, delay: 0.0, options: nil, animations: {
+                    self.topCard!.center.x = self.playerFirstCardLocation.x + CGFloat(self.playerEmptyIndex! * 30)
+                    self.topCard!.center.y = self.playerFirstCardLocation.y
+                    }, completion: {(Bool) -> () in
+                        if self.topCard != nil {
+                            self.topCard!.flip()
+                        }
+                })
+                playerHand.insert(topCard!, atIndex: playerEmptyIndex!)
+                topCard!.removeFromSuperview()
+                view.insertSubview(topCard!, atIndex: playerEmptyIndex!)
+                topCard!.layer.zPosition = CGFloat(playerEmptyIndex!)
                 // put the top card in the player's hand
                 
-                let deckIndex = Int(arc4random_uniform(24 - bidTurn! * 2))
-                emptyIndex = find(opponentHand, dummyCard)
-                opponentHand[emptyIndex!] = deck[deckIndex]
-                let opponentSpot = view.viewWithTag(emptyIndex! + 14) as UIImageView
-
-                // put the next card in the opponent's hand
+                let deckIndex = Int(arc4random_uniform(25 - bidTurn! * 2))
+                UIView.animateWithDuration(0.6, delay: 0.0, options: nil, animations: {
+                    self.deck[deckIndex].center.x = self.opponentFirstCardLocation.x + CGFloat(self.opponentEmptyIndex! * 30)
+                    self.deck[deckIndex].center.y = self.opponentFirstCardLocation.y
+                    }, completion: nil)
+                opponent.hand.insert(deck[deckIndex], atIndex: opponentEmptyIndex!)
+                view.addSubview(deck[deckIndex])
+                
+                opponent.cardsKnown.append(deck[deckIndex])
+                deck[deckIndex].layer.zPosition = CGFloat(opponentEmptyIndex!)
                 deck.removeAtIndex(deckIndex)
                 
                 isPlayerTurn = true
             } // player wins the turn
             else {
-                opponentPoints++
                 
-                var emptyIndex = find(opponentHand, dummyCard)
-                opponentHand[emptyIndex!] = topCard!
                 topCard!.flip()
-                // put the topCard in the opponent's hand
+                UIView.animateWithDuration(0.6, delay: 0.0, options: nil, animations: {
+                    self.topCard!.center.x = self.opponentFirstCardLocation.x + CGFloat(self.opponentEmptyIndex! * 30)
+                    self.topCard!.center.y = self.opponentFirstCardLocation.y
+                    }, completion: {(Bool) -> () in
+                        if self.topCard != nil {
+                            self.topCard!.flip()
+                        }
+                })
+                opponent.hand.insert(topCard!, atIndex: opponentEmptyIndex!)
+                view.addSubview(topCard!)
+                topCard!.layer.zPosition = CGFloat(opponentEmptyIndex!)
+                opponent.cardsKnown.append(topCard!)
                 
-                let deckIndex = Int(arc4random_uniform(24 - bidTurn! * 2))
-                emptyIndex = find(playerHand, dummyCard)
-                playerHand[emptyIndex!] = deck[deckIndex]
+                
+                let deckIndex = Int(arc4random_uniform(25 - bidTurn! * 2))
                 deck[deckIndex].flip()
+                deck[deckIndex].userInteractionEnabled = true
+                UIView.animateWithDuration(0.6, delay: 0.0, options: nil, animations: {
+                    self.deck[deckIndex].center.x = self.playerFirstCardLocation.x + CGFloat(self.playerEmptyIndex! * 30)
+                    self.deck[deckIndex].center.y = self.playerFirstCardLocation.y
+                    }, completion: nil)
                 // put the next card in the player's hand
+                view.insertSubview(deck[deckIndex], atIndex: playerEmptyIndex!)
+                playerHand.insert(deck[deckIndex], atIndex: playerEmptyIndex!)
+                deck[deckIndex].layer.zPosition = CGFloat(playerEmptyIndex!)
+
                 deck.removeAtIndex(deckIndex)
                 
                 isPlayerTurn = false
             } // bot wins the turn
+            sortPlayerHand()
+
+            opponent.cardsKnown.append(playerPlayedCard!)
             
-            // sort hands:
-            playerHand = Card.sortHand(playerHand)
-            for i in 0...12 {
-                let pCard = playerHand[i]
-                // sort the player hand but we might not actually do this...
-            } // sort the hands visually (clubs->diamonds->hearts->spades for player)
+            playerPlayedCard!.removeFromSuperview()
+            opponentPlayedCard!.removeFromSuperview()
+            playerPlayedCard = nil
+            opponentPlayedCard = nil
             
-            
-            playerCard = nil
-            opponentCard = nil
             
             bidTurn!++
             if bidTurn < 13 {
-                let topIndex = Int(arc4random_uniform(25 - bidTurn! * 2))
+                let topIndex = Int(arc4random_uniform(26 - bidTurn! * 2))
                 topCard = deck[topIndex]
                 deck.removeAtIndex(topIndex)
-                topCard!.flip()
-                playTurn()
+                view.addSubview(topCard!)
             } // more bid turns
             else {
                 bidTurn = nil
                 trickTurn = 0
-                print("Player: \(playerPoints)\nBot:\(opponentPoints)\n")
+                topCard = nil
             } // start trick turns
+            if !isPlayerTurn {
+                disablePlayerHand()
+                let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 2))
+                dispatch_after(delayTime, dispatch_get_main_queue()) {
+                    self.opponentPlay()
+                }
+            } else {
+                let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+                dispatch_after(delayTime, dispatch_get_main_queue()) {
+                    self.enablePlayerHand()
+                }
+            }
         } else if trickTurn != nil {
-            if winningCard == playerCard {
+            if winningCard! == playerPlayedCard {
                 playerPoints++
+                isPlayerTurn = true
             } // player wins the turn
             else {
                 opponentPoints++
+                isPlayerTurn = false
             } // bot wins the turn
+            
+            playerPlayedCard!.removeFromSuperview()
+            opponentPlayedCard!.removeFromSuperview()
+            playerPlayedCard = nil
+            opponentPlayedCard = nil
+            playerPointsLabel.text = "Player: \(playerPoints)"
+            opponentPointsLabel.text = "Opponent: \(opponentPoints)"
+            trickTurn!++
             if trickTurn < 13 {
-                
+                sortPlayerHand()
+                smoothOpponentHand()
+                if !isPlayerTurn {
+                    disablePlayerHand()
+                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 2))
+                    dispatch_after(delayTime, dispatch_get_main_queue()) {
+                        self.opponentPlay()
+                    }
+                } else {
+                    let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+                    dispatch_after(delayTime, dispatch_get_main_queue()) {
+                        self.enablePlayerHand()
+                    }
+                }
             } // more trick turns
             else {
+                var alertController: UIAlertController?
                 if playerPoints > opponentPoints {
-                    
+                    StatsManager.sharedStatsManager.stats.gamesWon++
+                    alertController = UIAlertController(title: "You Win!", message: nil, preferredStyle: .Alert)
                 } // player wins
                 else {
-                    
+                    alertController = UIAlertController(title: "The Computer Won!", message: nil, preferredStyle: .Alert)
                 } // bot wins
+                let newGameAction = UIAlertAction(title: "Play Again", style: .Default, handler: { (alert: UIAlertAction!) in
+                    self.setUpGame()
+                })
+                StatsManager.sharedStatsManager.stats.totalGames++
+                if playerPoints > StatsManager.sharedStatsManager.stats.mostTricksWon {
+                    StatsManager.sharedStatsManager.stats.mostTricksWon = playerPoints
+                }
+
+                let homeAction = UIAlertAction(title: "Menu", style: .Default, handler: { (alert: UIAlertAction!)
+                    in
+                    self.dismissViewControllerAnimated(true, completion: nil)
+                    })
+                alertController!.addAction(newGameAction)
+                alertController!.addAction(homeAction)
+                presentViewController(alertController!, animated: true, completion: nil)
             }
         }
     } // cleanUp
     
-    func opponentPlay(lead: Character?) {
-        if wantToWin() {
-            opponentCard = Card.bestPlay(opponentHand, lead, trump)
-            let index = find(opponentHand, opponentCard!)
-            // play the card at index
-            opponentHand[index!].flip()
-            opponentHand.removeAtIndex(index!)
-            if trickTurn == nil {
-                opponentHand.insert(dummyCard, atIndex: index!)
+    func opponentPlay() {
+        disablePlayerHand()
+        let cardToPlay: Card = opponent.playCard(playerPlayedCard, topCard)
+        cardToPlay.flip()
+        opponentEmptyIndex = find(opponent.hand, cardToPlay)
+        opponent.hand.removeAtIndex(opponentEmptyIndex!)
+        UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+            cardToPlay.center = self.opponentPlayedCardLocation
+            }, completion: {(Bool) in
+                if (!self.isPlayerTurn) {
+                    self.enablePlayerHand()
+                }
+        })
+        opponentPlayedCard = cardToPlay
+        if playerPlayedCard != nil {
+            disablePlayerHand()
+            let delayTime = dispatch_time(DISPATCH_TIME_NOW, Int64(NSEC_PER_SEC * 1))
+            dispatch_after(delayTime, dispatch_get_main_queue()) {
+                self.cleanUp()
             }
-        } // play best card because you want to win
-        else {
-            // figure out the worst card to play
-            let index = find(opponentHand, opponentCard!)
-            // play the card at index
-            opponentHand.removeAtIndex(index!)
-            if trickTurn == nil {
-                opponentHand.insert(dummyCard, atIndex: opponentHand.endIndex)
-            }
-        } // play worst card because you want to lose
-        if playerCard != nil {
-            cleanUp()
         } // if player has played, clean up
     } // opponentPlay
     
-    func wantToWin() -> Bool {
-        return true
-    } // wantToWin
+
+    func sortPlayerHand() {
+        playerHand = Card.sortHand(playerHand)
+        
+        for i in 0...(playerHand.count - 1) {
+            let card = playerHand[i]
+            card.removeFromSuperview()
+            view.insertSubview(card, atIndex: i)
+            card.layer.zPosition = CGFloat(i)
+            UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                card.center.x = self.playerFirstCardLocation.x + CGFloat(i * 30)
+                card.center.y = self.playerFirstCardLocation.y
+                }, completion: nil)
+        }
+    }
+    
+    func smoothOpponentHand() {
+        for i in 0...(opponent.hand.count - 1) {
+            let card = opponent.hand[i]
+            card.layer.zPosition = CGFloat(i)
+            UIView.animateWithDuration(0.3, delay: 0.0, options: nil, animations: {
+                card.center.x = self.opponentFirstCardLocation.x + CGFloat(i * 30)
+                card.center.y = self.opponentFirstCardLocation.y
+                }, completion: nil)
+        }
+    }
+    
+    func disablePlayerHand() {
+        for card in playerHand {
+            card.userInteractionEnabled = false
+        }
+    }
+    
+    func enablePlayerHand() {
+        for card in playerHand {
+            card.userInteractionEnabled = true
+        }
+    }
     
 }
